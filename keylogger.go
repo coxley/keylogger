@@ -56,11 +56,16 @@ func (k *KeyLogger) IsRoot() bool {
 // Read from file descriptor
 // Blocking call, returns channel
 // Make sure to close channel when finish
+// Channel will be closed if can no longer read from device
 func (k *KeyLogger) Read() chan InputEvent {
 	event := make(chan InputEvent)
 	go func(event chan InputEvent) {
 		for {
-			e := k.read()
+			e, err := k.read()
+			if err != nil {
+				close(event)
+				return
+			}
 			if e != nil {
 				event <- *e
 			}
@@ -70,17 +75,17 @@ func (k *KeyLogger) Read() chan InputEvent {
 }
 
 // read from file description and parse binary into go struct
-func (k *KeyLogger) read() *InputEvent {
+func (k *KeyLogger) read() (*InputEvent, error) {
 	buffer := make([]byte, eventsize)
 	n, err := k.fd.Read(buffer)
 	if err != nil {
 		logrus.Error(err)
-		return nil
+		return nil, err
 	}
 	if n <= 0 {
-		return nil
+		return nil, nil
 	}
-	return k.eventFromBuffer(buffer)
+	return k.eventFromBuffer(buffer), nil
 }
 
 // eventFromBuffer parser bytes into InputEvent struct
